@@ -15,8 +15,8 @@ const cron = require('node-cron');
 const TOKEN = process.env.TOKEN;
 const CLIENT_ID = process.env.CLIENT_ID;
 const GUILD_ID = process.env.GUILD_ID;
-const CHANNEL_ID = process.env.CHANNEL_ID; // ID du canal texte pour les sondages
-const ROLE_ID = '1402222445901119558'; // Ton rôle à ping
+const CHANNEL_ID = process.env.CHANNEL_ID;
+const ROLE_ID = '1402222445901119558';
 
 const client = new Client({
   intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent],
@@ -43,13 +43,11 @@ const createButtons = (jour) => new ActionRowBuilder()
 
 // Créer l'embed
 const createEmbed = (jour) => {
-  const embed = new EmbedBuilder()
+  return new EmbedBuilder()
     .setTitle(`📅 Présence à l'entraînement de ${jour.toUpperCase()}`)
     .setDescription('Cliquez sur un bouton pour répondre.')
     .setColor(0x00AE86)
     .setTimestamp();
-
-  return embed;
 };
 
 // Envoyer les sondages
@@ -67,21 +65,44 @@ async function sendPolls(channel) {
   });
 }
 
-// Gestion des clics avec mise à jour du message pour éviter l'échec
+// Gestion des interactions
 client.on(Events.InteractionCreate, async interaction => {
-  if (!interaction.isButton()) return;
+  if (interaction.isButton()) {
+    const [jour, reponse] = interaction.customId.split('_');
 
-  const [jour, reponse] = interaction.customId.split('_');
+    votes[jour].set(interaction.user.id, reponse.toUpperCase());
 
-  votes[jour].set(interaction.user.id, reponse.toUpperCase());
+    try {
+      await interaction.update({
+        content: `✅ Ton vote pour **${jour.toUpperCase()}** a été enregistré : **${reponse.toUpperCase()}**`,
+        components: [createButtons(jour)],
+      });
+    } catch (error) {
+      console.error('Erreur lors de la mise à jour de l’interaction:', error);
+    }
 
-  try {
-    await interaction.update({
-      content: `✅ Ton vote pour **${jour.toUpperCase()}** a été enregistré : **${reponse.toUpperCase()}**`,
-      components: [createButtons(jour)],
-    });
-  } catch (error) {
-    console.error('Erreur lors de la mise à jour de l’interaction:', error);
+  } else if (interaction.isChatInputCommand()) {
+    if (interaction.commandName === 'resultats') {
+      const mercrediVotes = votes.mercredi;
+      const vendrediVotes = votes.vendredi;
+
+      const mercrediOui = [...mercrediVotes.values()].filter(v => v === 'OUI').length;
+      const mercrediNon = [...mercrediVotes.values()].filter(v => v === 'NON').length;
+
+      const vendrediOui = [...vendrediVotes.values()].filter(v => v === 'OUI').length;
+      const vendrediNon = [...vendrediVotes.values()].filter(v => v === 'NON').length;
+
+      const resultEmbed = new EmbedBuilder()
+        .setTitle('📊 Résultats des votes aux entraînements')
+        .addFields(
+          { name: 'Mercredi', value: `✅ Oui : ${mercrediOui}\n❌ Non : ${mercrediNon}`, inline: true },
+          { name: 'Vendredi', value: `✅ Oui : ${vendrediOui}\n❌ Non : ${vendrediNon}`, inline: true }
+        )
+        .setColor(0x00AE86)
+        .setTimestamp();
+
+      await interaction.reply({ embeds: [resultEmbed], ephemeral: true });
+    }
   }
 });
 
@@ -113,4 +134,3 @@ client.once(Events.ClientReady, async () => {
 });
 
 client.login(TOKEN);
-
