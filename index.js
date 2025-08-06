@@ -67,7 +67,7 @@ async function sendPolls(channel) {
   });
 }
 
-// Gestion des clics
+// Gestion des clics avec mise à jour du message pour éviter l'échec
 client.on(Events.InteractionCreate, async interaction => {
   if (!interaction.isButton()) return;
 
@@ -75,10 +75,14 @@ client.on(Events.InteractionCreate, async interaction => {
 
   votes[jour].set(interaction.user.id, reponse.toUpperCase());
 
-  await interaction.reply({
-    content: `Ta réponse pour **${jour.toUpperCase()}** a été enregistrée : **${reponse.toUpperCase()}**`,
-    flags: InteractionResponseFlags.Ephemeral,
-  });
+  try {
+    await interaction.update({
+      content: `✅ Ton vote pour **${jour.toUpperCase()}** a été enregistré : **${reponse.toUpperCase()}**`,
+      components: [createButtons(jour)],
+    });
+  } catch (error) {
+    console.error('Erreur lors de la mise à jour de l’interaction:', error);
+  }
 });
 
 // Gestion des erreurs
@@ -109,3 +113,4 @@ client.once(Events.ClientReady, async () => {
 });
 
 client.login(TOKEN);
+
