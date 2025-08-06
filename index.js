@@ -1,14 +1,17 @@
 require('dotenv').config();
 
-const { 
-  Client, 
-  GatewayIntentBits, 
-  EmbedBuilder, 
-  ButtonBuilder, 
-  ActionRowBuilder, 
-  ButtonStyle, 
-  Events, 
-  InteractionResponseFlags 
+const {
+  Client,
+  GatewayIntentBits,
+  EmbedBuilder,
+  ButtonBuilder,
+  ActionRowBuilder,
+  ButtonStyle,
+  Events,
+  InteractionType,
+  SlashCommandBuilder,
+  REST,
+  Routes
 } = require('discord.js');
 const cron = require('node-cron');
 
@@ -28,7 +31,7 @@ const votes = {
   vendredi: new Map(),
 };
 
-// Créer les boutons
+// Boutons
 const createButtons = (jour) => new ActionRowBuilder()
   .addComponents(
     new ButtonBuilder()
@@ -41,16 +44,15 @@ const createButtons = (jour) => new ActionRowBuilder()
       .setStyle(ButtonStyle.Danger)
   );
 
-// Créer l'embed
-const createEmbed = (jour) => {
-  return new EmbedBuilder()
+// Embed sondage
+const createEmbed = (jour) =>
+  new EmbedBuilder()
     .setTitle(`📅 Présence à l'entraînement de ${jour.toUpperCase()}`)
     .setDescription('Cliquez sur un bouton pour répondre.')
     .setColor(0x00AE86)
     .setTimestamp();
-};
 
-// Envoyer les sondages
+// Envoyer sondages
 async function sendPolls(channel) {
   await channel.send(`<@&${ROLE_ID}>`);
   await channel.send({
@@ -65,64 +67,80 @@ async function sendPolls(channel) {
   });
 }
 
-// Gestion des interactions
+// Gérer clics sur les boutons
 client.on(Events.InteractionCreate, async interaction => {
-  if (interaction.isButton()) {
-    const [jour, reponse] = interaction.customId.split('_');
+  if (!interaction.isButton()) return;
 
-    votes[jour].set(interaction.user.id, reponse.toUpperCase());
+  const [jour, reponse] = interaction.customId.split('_');
+  votes[jour].set(interaction.user.id, reponse.toUpperCase());
 
-    try {
-      await interaction.update({
-        content: `✅ Ton vote pour **${jour.toUpperCase()}** a été enregistré : **${reponse.toUpperCase()}**`,
-        components: [createButtons(jour)],
-      });
-    } catch (error) {
-      console.error('Erreur lors de la mise à jour de l’interaction:', error);
-    }
+  await interaction.reply({
+    content: `Ta réponse pour **${jour.toUpperCase()}** a été enregistrée : **${reponse.toUpperCase()}** ✅`,
+    ephemeral: true
+  });
+});
 
-  } else if (interaction.isChatInputCommand()) {
-    if (interaction.commandName === 'resultats') {
-      const mercrediVotes = votes.mercredi;
-      const vendrediVotes = votes.vendredi;
+// Commande /résultats
+client.on(Events.InteractionCreate, async interaction => {
+  if (interaction.type !== InteractionType.ApplicationCommand) return;
+  if (interaction.commandName !== 'résultats') return;
 
-      const mercrediOui = [...mercrediVotes.values()].filter(v => v === 'OUI').length;
-      const mercrediNon = [...mercrediVotes.values()].filter(v => v === 'NON').length;
+  const buildResultEmbed = (jour) => {
+    const totalOui = Array.from(votes[jour].values()).filter(v => v === 'OUI').length;
+    const totalNon = Array.from(votes[jour].values()).filter(v => v === 'NON').length;
 
-      const vendrediOui = [...vendrediVotes.values()].filter(v => v === 'OUI').length;
-      const vendrediNon = [...vendrediVotes.values()].filter(v => v === 'NON').length;
+    return new EmbedBuilder()
+      .setTitle(`📊 Résultats pour ${jour.toUpperCase()}`)
+      .setColor(0x3498db)
+      .addFields(
+        { name: '✅ OUI', value: `${totalOui}`, inline: true },
+        { name: '❌ NON', value: `${totalNon}`, inline: true },
+      )
+      .setTimestamp();
+  };
 
-      const resultEmbed = new EmbedBuilder()
-        .setTitle('📊 Résultats des votes aux entraînements')
-        .addFields(
-          { name: 'Mercredi', value: `✅ Oui : ${mercrediOui}\n❌ Non : ${mercrediNon}`, inline: true },
-          { name: 'Vendredi', value: `✅ Oui : ${vendrediOui}\n❌ Non : ${vendrediNon}`, inline: true }
-        )
-        .setColor(0x00AE86)
-        .setTimestamp();
+  await interaction.reply({
+    embeds: [buildResultEmbed('mercredi'), buildResultEmbed('vendredi')],
+    ephemeral: true
+  });
+});
 
-      await interaction.reply({ embeds: [resultEmbed], ephemeral: true });
-    }
+// Enregistrement commande /résultats
+async function registerCommands() {
+  const commands = [
+    new SlashCommandBuilder()
+      .setName('résultats')
+      .setDescription("Afficher les résultats des sondages"),
+  ].map(cmd => cmd.toJSON());
+
+  const rest = new REST({ version: '10' }).setToken(TOKEN);
+
+  try {
+    console.log('🔄 Enregistrement de la commande slash...');
+    await rest.put(
+      Routes.applicationGuildCommands(CLIENT_ID, GUILD_ID),
+      { body: commands }
+    );
+    console.log('✅ Commande slash enregistrée.');
+  } catch (error) {
+    console.error('Erreur lors de l’enregistrement de la commande slash :', error);
   }
-});
+}
 
-// Gestion des erreurs
-client.on('error', error => {
-  console.error('Erreur client Discord:', error);
-});
-
+// Prêt
 client.once(Events.ClientReady, async () => {
   console.log(`✅ Connecté en tant que ${client.user.tag}`);
+
+  await registerCommands();
 
   const guild = await client.guilds.fetch(GUILD_ID);
   const channel = guild.channels.cache.get(CHANNEL_ID);
 
   if (!channel || !channel.isTextBased()) {
-    console.error('Le canal texte spécifié est introuvable ou invalide.');
+    console.error('❌ Le canal texte spécifié est introuvable ou invalide.');
     return;
   }
 
-  // Envoi immédiat pour test
   await sendPolls(channel);
 
   // Programmation chaque lundi à 07h00
@@ -134,3 +152,4 @@ client.once(Events.ClientReady, async () => {
 });
 
 client.login(TOKEN);
+
