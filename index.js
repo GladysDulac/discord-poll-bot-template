@@ -19,7 +19,7 @@ const TOKEN = process.env.TOKEN;
 const CLIENT_ID = process.env.CLIENT_ID;
 const GUILD_ID = process.env.GUILD_ID;
 const CHANNEL_ID = process.env.CHANNEL_ID;
-const ROLE_ID = '1402222445901119558';
+const ROLE_ID = '1402222445901119558'; // Rôle à ping pour les sondages
 
 const client = new Client({
   intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent],
@@ -31,7 +31,7 @@ const votes = {
   vendredi: new Map(),
 };
 
-// Boutons
+// Boutons pour sondage
 const createButtons = (jour) => new ActionRowBuilder()
   .addComponents(
     new ButtonBuilder()
@@ -67,7 +67,7 @@ async function sendPolls(channel) {
   });
 }
 
-// Gérer clics sur les boutons
+// Gérer clics boutons
 client.on(Events.InteractionCreate, async interaction => {
   if (!interaction.isButton()) return;
 
@@ -80,28 +80,60 @@ client.on(Events.InteractionCreate, async interaction => {
   });
 });
 
-// Commande /résultats
+// Commande /résultats avec contrôle des rôles
 client.on(Events.InteractionCreate, async interaction => {
   if (interaction.type !== InteractionType.ApplicationCommand) return;
   if (interaction.commandName !== 'résultats') return;
 
-  const buildResultEmbed = (jour) => {
-    const totalOui = Array.from(votes[jour].values()).filter(v => v === 'OUI').length;
-    const totalNon = Array.from(votes[jour].values()).filter(v => v === 'NON').length;
+  // Rôles autorisés à voir les résultats
+  const ROLES_AUTORISES = [
+    '1402257000858910790',
+    '1402219622459248742',
+    '1402221368392810588'
+  ];
+
+  const member = interaction.member; // GuildMember
+
+  // Vérifie si le membre a au moins un rôle autorisé
+  const hasRole = member.roles.cache.some(role => ROLES_AUTORISES.includes(role.id));
+
+  if (!hasRole) {
+    return interaction.reply({
+      content: "❌ Tu n'as pas la permission de voir les résultats.",
+      ephemeral: true,
+    });
+  }
+
+  // Construire les embeds résultats
+  const buildResultEmbed = async (jour) => {
+    const ouiUsers = [];
+    const nonUsers = [];
+
+    for (const [userId, vote] of votes[jour]) {
+      try {
+        const user = await client.users.fetch(userId);
+        if (vote === 'OUI') ouiUsers.push(user.username);
+        else if (vote === 'NON') nonUsers.push(user.username);
+      } catch {}
+    }
 
     return new EmbedBuilder()
       .setTitle(`📊 Résultats pour ${jour.toUpperCase()}`)
       .setColor(0x3498db)
       .addFields(
-        { name: '✅ OUI', value: `${totalOui}`, inline: true },
-        { name: '❌ NON', value: `${totalNon}`, inline: true },
+        { name: `✅ OUI (${ouiUsers.length})`, value: ouiUsers.length ? ouiUsers.join('\n') : 'Aucun', inline: true },
+        { name: `❌ NON (${nonUsers.length})`, value: nonUsers.length ? nonUsers.join('\n') : 'Aucun', inline: true },
       )
       .setTimestamp();
   };
 
+  const embedMercredi = await buildResultEmbed('mercredi');
+  const embedVendredi = await buildResultEmbed('vendredi');
+
+  // Envoyer les résultats en message public
   await interaction.reply({
-    embeds: [buildResultEmbed('mercredi'), buildResultEmbed('vendredi')],
-    ephemeral: true
+    embeds: [embedMercredi, embedVendredi],
+    ephemeral: false,
   });
 });
 
@@ -152,4 +184,5 @@ client.once(Events.ClientReady, async () => {
 });
 
 client.login(TOKEN);
+
 
