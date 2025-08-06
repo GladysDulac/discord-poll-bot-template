@@ -18,4 +18,27 @@ Un template pour un bot Discord qui envoie automatiquement un sondage chaque lun
 3. Connecte-le à Railway via le dashboard  
 
 ## ⚙️ Variables (Railway ou `.env`)
+TOKEN=...
+CLIENT_ID=...
+GUILD_ID=...
+ROLE_ID=...
+CHANNEL_ID=...
 
+shell
+Copier
+Modifier
+
+## 🚀 Démarrage
+
+npm install
+npm start
+
+markdown
+Copier
+Modifier
+
+Le bot envoie le sondage chaque lundi matin.
+
+## Pour tester maintenant
+
+- Exécute `sendWeeklyPoll()` manuellement sur Node.js
