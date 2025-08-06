@@ -104,32 +104,61 @@ client.on(Events.InteractionCreate, async interaction => {
     });
   }
 
-// Construire les embeds résultats
-const buildResultEmbed = async (jour) => {
-  const ouiUsers = [];
-  const nonUsers = [];
+  // Construire les embeds résultats
+  const buildResultEmbed = async (jour) => {
+    const ouiUsers = [];
+    const nonUsers = [];
 
-  for (const [userId, vote] of votes[jour]) {
-    try {
-      const user = await client.users.fetch(userId);
-      if (vote === 'oui') {
-        ouiUsers.push(user.username);
-      } else if (vote === 'non') {
-        nonUsers.push(user.username);
+    for (const [userId, vote] of votes[jour]) {
+      try {
+        const user = await client.users.fetch(userId);
+        if (vote === 'OUI') {
+          ouiUsers.push(user.username);
+        } else if (vote === 'NON') {
+          nonUsers.push(user.username);
+        }
+      } catch (err) {
+        console.error(`Impossible de récupérer l'utilisateur ${userId}:`, err);
       }
-    } catch (err) {
-      console.error(`Impossible de récupérer l'utilisateur ${userId}:`, err);
     }
+
+    const embed = new EmbedBuilder()
+      .setTitle(`📊 Résultats du sondage - ${jour.toUpperCase()}`)
+      .setColor(0x00AE86)
+      .addFields(
+        { name: '✅ OUI', value: ouiUsers.length ? ouiUsers.join('\n') : 'Aucun', inline: true },
+        { name: '❌ NON', value: nonUsers.length ? nonUsers.join('\n') : 'Aucun', inline: true }
+      )
+      .setTimestamp();
+
+    return embed;
+  };
+
+  // Envoyer les résultats
+  const mercrediEmbed = await buildResultEmbed('mercredi');
+  const vendrediEmbed = await buildResultEmbed('vendredi');
+
+  await interaction.reply({
+    embeds: [mercrediEmbed, vendrediEmbed],
+    ephemeral: true,
+  });
+});
+
+// Planification des sondages tous les lundis à 7h
+cron.schedule('0 7 * * 1', async () => {
+  const channel = await client.channels.fetch(CHANNEL_ID);
+  if (channel) {
+    await sendPolls(channel);
+    console.log('✅ Sondages envoyés (lundi 7h)');
   }
+});
 
-  const embed = new EmbedBuilder()
-    .setTitle(`Résultats du sondage ${jour}`)
-    .setColor(0x00AE86)
-    .addFields(
-      { name: '✅ Oui', value: ouiUsers.length ? ouiUsers.join('\n') : 'Aucun', inline: true },
-      { name: '❌ Non', value: nonUsers.length ? nonUsers.join('\n') : 'Aucun', inline: true }
-    )
-    .setTimestamp();
+// Réinitialisation des votes tous les samedis à 7h
+cron.schedule('0 7 * * 6', () => {
+  votes.mercredi.clear();
+  votes.vendredi.clear();
+  console.log('🔁 Votes réinitialisés (samedi 7h)');
+});
 
-  return embed;
-};
+// Connexion du bot
+client.login(TOKEN);
