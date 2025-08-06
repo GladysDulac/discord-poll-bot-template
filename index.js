@@ -1,11 +1,21 @@
-require('dotenv').config(); // pour lecture du .env si en local
+require('dotenv').config();
 
-const { Client, GatewayIntentBits, EmbedBuilder, ButtonBuilder, ActionRowBuilder, ButtonStyle, Events } = require('discord.js');
+const { 
+  Client, 
+  GatewayIntentBits, 
+  EmbedBuilder, 
+  ButtonBuilder, 
+  ActionRowBuilder, 
+  ButtonStyle, 
+  Events, 
+  InteractionResponseFlags 
+} = require('discord.js');
 const cron = require('node-cron');
 
 const TOKEN = process.env.TOKEN;
 const CLIENT_ID = process.env.CLIENT_ID;
 const GUILD_ID = process.env.GUILD_ID;
+const CHANNEL_ID = process.env.CHANNEL_ID; // ID du canal texte pour les sondages
 const ROLE_ID = '1402222445901119558'; // Ton rôle à ping
 
 const client = new Client({
@@ -44,14 +54,12 @@ const createEmbed = (jour) => {
 
 // Envoyer les sondages
 async function sendPolls(channel) {
-  // MERCREDI
   await channel.send(`<@&${ROLE_ID}>`);
   await channel.send({
     embeds: [createEmbed('mercredi')],
     components: [createButtons('mercredi')],
   });
 
-  // VENDREDI
   await channel.send(`<@&${ROLE_ID}>`);
   await channel.send({
     embeds: [createEmbed('vendredi')],
@@ -69,26 +77,30 @@ client.on(Events.InteractionCreate, async interaction => {
 
   await interaction.reply({
     content: `Ta réponse pour **${jour.toUpperCase()}** a été enregistrée : **${reponse.toUpperCase()}**`,
-    ephemeral: true,
+    flags: InteractionResponseFlags.Ephemeral,
   });
 });
 
-// Quand le bot est prêt
+// Gestion des erreurs
+client.on('error', error => {
+  console.error('Erreur client Discord:', error);
+});
+
 client.once(Events.ClientReady, async () => {
   console.log(`✅ Connecté en tant que ${client.user.tag}`);
 
   const guild = await client.guilds.fetch(GUILD_ID);
-  const channel = guild.channels.cache.find(c => c.isTextBased() && c.viewable);
+  const channel = guild.channels.cache.get(CHANNEL_ID);
 
-  if (!channel) {
-    console.error('Aucun canal texte trouvé pour envoyer les sondages.');
+  if (!channel || !channel.isTextBased()) {
+    console.error('Le canal texte spécifié est introuvable ou invalide.');
     return;
   }
 
-  // 🧪 Envoi immédiat pour test
+  // Envoi immédiat pour test
   await sendPolls(channel);
 
-  // ⏰ Programmation chaque lundi à 07h00
+  // Programmation chaque lundi à 07h00
   cron.schedule('0 7 * * 1', async () => {
     await sendPolls(channel);
   }, {
@@ -96,7 +108,4 @@ client.once(Events.ClientReady, async () => {
   });
 });
 
-// Lancer le bot
 client.login(TOKEN);
-
-
