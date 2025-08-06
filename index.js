@@ -104,12 +104,32 @@ client.on(Events.InteractionCreate, async interaction => {
     });
   }
 
-  // Construire les embeds résultats
-  const buildResultEmbed = async (jour) => {
-    const ouiUsers = [];
-    const nonUsers = [];
+// Construire les embeds résultats
+const buildResultEmbed = async (jour) => {
+  const ouiUsers = [];
+  const nonUsers = [];
 
-    for (const [userId, vote] of votes[jour]) {
-      try {
-        const user = await client.users.fetch(userId);
+  for (const [userId, vote] of votes[jour]) {
+    try {
+      const user = await client.users.fetch(userId);
+      if (vote === 'oui') {
+        ouiUsers.push(user.username);
+      } else if (vote === 'non') {
+        nonUsers.push(user.username);
+      }
+    } catch (err) {
+      console.error(`Impossible de récupérer l'utilisateur ${userId}:`, err);
+    }
+  }
 
+  const embed = new EmbedBuilder()
+    .setTitle(`Résultats du sondage ${jour}`)
+    .setColor(0x00AE86)
+    .addFields(
+      { name: '✅ Oui', value: ouiUsers.length ? ouiUsers.join('\n') : 'Aucun', inline: true },
+      { name: '❌ Non', value: nonUsers.length ? nonUsers.join('\n') : 'Aucun', inline: true }
+    )
+    .setTimestamp();
+
+  return embed;
+};
