@@ -69,7 +69,13 @@ client.on(Events.InteractionCreate, async interaction => {
 
 client.once(Events.ClientReady, () => {
   console.log(`✅ Connecté en tant que ${client.user.tag}`);
-  cron.schedule('0 6 * * 1', sendWeeklyPoll); // Lundi à 07:00 heure France (6:00 UTC)
+
+  // Envoi immédiat du sondage pour test
+  sendWeeklyPoll();
+
+  // Puis la planification hebdo normale
+  cron.schedule('0 6 * * 1', sendWeeklyPoll); // Lundi 7h heure France (6h UTC)
 });
 
 client.login(config.token);
+
